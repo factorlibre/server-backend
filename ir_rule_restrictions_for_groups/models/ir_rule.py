@@ -24,18 +24,17 @@ class IrRule(models.Model):
         ),
     )
     def _compute_domain(self, model_name, mode="read"):
-        if self.env.context.get("avoid_loop", False):
-            return
         res = super()._compute_domain(model_name, mode=mode)
-        rules = self._get_rules(model_name, mode=mode)
-        eval_context = self.with_context(avoid_loop=True)._eval_context()
         restriction_domains = []
-        for rule in rules.sudo():
-            # evaluate the domain for the current user
-            dom = (
-                safe_eval(rule.domain_force, eval_context) if rule.domain_force else []
-            )
-            dom = expression.normalize_domain(dom)
-            if rule.and_restriction_for_groups:
+        if not self.env.su:
+            rules = self._get_rules(model_name, mode=mode)
+            eval_context = self._eval_context()
+            for rule in rules.sudo().filtered(lambda r: r.and_restriction_for_groups):
+                dom = (
+                    safe_eval(rule.domain_force, eval_context)
+                    if rule.domain_force
+                    else []
+                )
+                dom = expression.normalize_domain(dom)
                 restriction_domains.append(dom)
         return expression.AND(restriction_domains + [res])
